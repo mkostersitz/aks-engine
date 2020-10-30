@@ -128,7 +128,7 @@ $global:AzureCNIBinDir = [Io.path]::Combine("$global:AzureCNIDir", "bin")
 $global:AzureCNIConfDir = [Io.path]::Combine("$global:AzureCNIDir", "netconf")
 
 # Azure cni configuration
-# $global:NetworkPolicy = "{{WrapAsParameter "networkPolicy"}}" # BUG: unused
+$global:NetworkPolicy = "{{WrapAsParameter "networkPolicy"}}" # BUG: unused
 $global:NetworkPlugin = "{{WrapAsParameter "networkPlugin"}}"
 $global:VNetCNIPluginsURL = "{{WrapAsParameter "vnetCniWindowsPluginsURL"}}"
 $global:IsDualStackEnabled = {{if IsIPv6DualStackFeatureEnabled}}$true{{else}}$false{{end}}
@@ -194,6 +194,9 @@ try
         $conf.DisableTelemetry = -not $global:enableTelemetry
         $conf.InstrumentationKey = $global:TelemetryKey
         $global:AppInsightsClient = New-Object "Microsoft.ApplicationInsights.TelemetryClient"($conf)
+        
+        # Calico install script Path
+        $global:CalicoInstallScriptPath = "https://docs.projectcalico.org/scripts/install-calico-windows.ps1"
 
         $global:AppInsightsClient.Context.Properties["correlation_id"] = New-Guid
         $global:AppInsightsClient.Context.Properties["cri"] = $global:ContainerRuntime
@@ -389,6 +392,15 @@ try
                     -NetworkAPIVersion $NetworkAPIVersion `
                     -AzureEnvironmentFilePath $([io.path]::Combine($global:KubeDir, "azurestackcloud.json")) `
                     -IdentitySystem "{{ GetIdentitySystem }}"
+            }
+            if($global:NetworkPolicy.ToLower() -eq "calico"){
+                # this downloads and installes Calico for Windows.
+                # this assumes that the Windows Version is at least 10.0.17763.1554 and Kube-Proxy.exe is the 1.19.1 or higher version and DSR mode is enabled
+                Write-Log "Installing Calico Network Policy for Windows"
+                Invoke-WebRequest  $global:CalicoInstallScriptPath -OutFile c:\install-calico-windows.ps1
+                $CalicoInstallCmd = "C:\install-calico-windows.ps1"
+                Invoke-Expression $CalicoInstallCmd
+                Write-Log "Completed Installing Calico Network Policy for Windows"
             }
         }
         elseif ($global:NetworkPlugin -eq "kubenet") {
